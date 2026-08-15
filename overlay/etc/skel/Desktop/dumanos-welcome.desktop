@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=dumanOS Kontrol Merkezi
+Exec=/usr/local/bin/dumanos-welcome
+Icon=preferences-system
+Terminal=false
+Type=Application

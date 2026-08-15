@@ -1,0 +1,19 @@
+#!/bin/bash
+# ==============================================================================
+# dumanOS Firstboot Helper
+# ==============================================================================
+
+# Update MIME database for APK files
+update-mime-database /usr/share/mime || true
+update-desktop-database /usr/share/applications || true
+
+# Associate .apk with dumanos-apk-installer by default
+if [ -f /etc/skel/.config/mimeapps.list ]; then
+    echo "application/vnd.android.package-archive=dumanos-apk-installer.desktop;" >> /etc/skel/.config/mimeapps.list
+fi
+
+# Load binder modules if available
+modprobe binder_linux 2>/dev/null || true
+modprobe ashmem_linux 2>/dev/null || true
+
+exit 0

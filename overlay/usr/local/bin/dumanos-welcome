@@ -1,0 +1,35 @@
+#!/bin/bash
+# ==============================================================================
+# dumanOS Welcome Center & Control Dashboard
+# ==============================================================================
+
+show_menu() {
+    CHOICE=$(kdialog --radiolist "dumanOS Kontrol Merkezi'ne Hoş Geldiniz!" \
+        "1" "Android Motorunu ve Google Play'i Kur / Güncelle" on \
+        "2" "Google Play Cihaz Kaydını Yap (GSF ID)" off \
+        "3" "Android Ayarlarını Aç (LineageOS Settings)" off \
+        "4" "Waydroid Durumunu Kontrol Et / Yeniden Başlat" off \
+        --title "dumanOS Kontrol Merkezi" --geometry 520x350)
+
+    case "$CHOICE" in
+        "1")
+            konsole --noclose -e sudo /usr/local/bin/dumanos-init-android &
+            ;;
+        "2")
+            /usr/local/bin/dumanos-register-gsf &
+            ;;
+        "3")
+            waydroid app launch com.android.settings &
+            ;;
+        "4")
+            sudo systemctl restart waydroid-container.service
+            kdialog --msgbox "Waydroid Container servisi yeniden başlatıldı." --title "dumanOS"
+            ;;
+    esac
+}
+
+if command -v kdialog &> /dev/null; then
+    show_menu
+else
+    echo "dumanOS Kontrol Merkezi"
+fi

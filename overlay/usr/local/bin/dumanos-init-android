@@ -1,0 +1,61 @@
+#!/bin/bash
+# ==============================================================================
+# dumanOS Android & Google Play Initialization Script
+# Automates Waydroid GAPPS + libndk (ARM Translation) Setup
+# ==============================================================================
+
+set -e
+
+echo "=========================================="
+echo "   dumanOS Android Engine Setup"
+echo "=========================================="
+
+# Check root/sudo
+if [ "$EUID" -ne 0 ]; then
+  echo "[!] Please run with sudo: sudo dumanos-init-android"
+  exit 1
+fi
+
+echo "[1/4] Configuring Waydroid repository..."
+if ! command -v waydroid &> /dev/null; then
+    export DISTRO="bookworm"
+    curl -fsSL https://repo.waydro.id/waydroid.gpg > /usr/share/keyrings/waydroid.gpg
+    echo "deb [signed-by=/usr/share/keyrings/waydroid.gpg] https://repo.waydro.id/ $DISTRO main" > /etc/apt/sources.list.d/waydroid.list
+    apt-get update
+    apt-get install -y waydroid
+fi
+
+echo "[2/4] Initializing Waydroid with Google Play (GAPPS) Image..."
+# Initialize with official LineageOS GAPPS image
+if [ ! -d "/var/lib/waydroid/images" ] || [ ! -f "/var/lib/waydroid/images/system.img" ]; then
+    waydroid init -s GAPPS -f
+else
+    echo "[i] Waydroid images already initialized."
+fi
+
+echo "[3/4] Installing libndk ARM-to-x86 Translation Layer..."
+# Clone and run waydroid_extras helper to integrate libndk / libhoudini
+TMP_DIR=$(mktemp -d)
+git clone --depth=1 https://github.com/casualsnek/waydroid_script "$TMP_DIR/waydroid_script"
+
+# Setup python environment for the installer
+python3 -m venv "$TMP_DIR/venv"
+"$TMP_DIR/venv/bin/pip" install --upgrade pip
+"$TMP_DIR/venv/bin/pip" install -r "$TMP_DIR/waydroid_script/requirements.txt"
+
+echo "[*] Injecting libndk translation..."
+"$TMP_DIR/venv/bin/python3" "$TMP_DIR/waydroid_script/main.py" install libndk
+
+# Enable multi-window mode so Android apps open as native desktop windows
+waydroid prop set persist.waydroid.multi_windows true
+
+rm -rf "$TMP_DIR"
+
+echo "[4/4] Starting Waydroid Container Service..."
+systemctl enable --now waydroid-container.service
+
+echo "=========================================================="
+echo " [✓] dumanOS Android Engine successfully configured!"
+echo " Google Play Store and APK support is now ready."
+echo " To register Google Play, run: dumanos-register-gsf"
+echo "=========================================================="

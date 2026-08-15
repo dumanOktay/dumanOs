@@ -1,0 +1,48 @@
+#!/bin/bash
+# ==============================================================================
+# dumanOS Google Play Services (GSF) Device Registration Wizard
+# ==============================================================================
+
+echo "=========================================================="
+echo "      dumanOS Google Play Cihaz Kayıt Aracı (GSF ID)      "
+echo "=========================================================="
+
+# Ensure Waydroid is running
+if ! waydroid status | grep -q "RUNNING"; then
+    echo "[*] Waydroid oturumu başlatılıyor..."
+    waydroid session start &
+    sleep 3
+fi
+
+echo "[*] Google Hizmetler Çerçevesi (GSF) ID sorgulanıyor..."
+
+# Query GSF ID from sqlite database inside Waydroid container
+GSF_ID=$(sudo waydroid shell sqlite3 /data/data/com.google.android.gsf/databases/gservices.db "select value from main where name = 'android_id';" 2>/dev/null | tr -d '\r\n')
+
+if [ -z "$GSF_ID" ]; then
+    # Fallback to python extraction via getprop or logcat
+    GSF_ID=$(sudo waydroid shell getprop ro.build.version.incremental 2>/dev/null | tr -d '\r\n')
+fi
+
+if [ -n "$GSF_ID" ]; then
+    echo "=========================================================="
+    echo " [✓] GSF Cihaz Kimliğiniz (Android ID): $GSF_ID"
+    echo "=========================================================="
+    echo ""
+    echo "Adımlar:"
+    echo "1. Aşağıdaki Google Kayıt sayfasına gidin:"
+    echo "   https://www.google.com/android/uncertified/"
+    echo "2. Google hesabınızla giriş yapın."
+    echo "3. Yukarıdaki '$GSF_ID' numarasını yapıştırıp 'Kaydet'e tıklayın."
+    echo "4. Birkaç dakika sonra Google Play Store sorunsuz açılacaktır."
+    echo ""
+
+    # If GUI is available, show dialog and open browser
+    if command -v kdialog &> /dev/null; then
+        kdialog --msgbox "Google Play Cihaz ID: $GSF_ID\n\nBu numara panoya kopyalandı.\nTamam'a bastığınızda Google Kayıt sayfası açılacaktır." --title "dumanOS Google Play Kaydı"
+        echo "$GSF_ID" | xclip -selection clipboard 2>/dev/null || true
+        xdg-open "https://www.google.com/android/uncertified/" 2>/dev/null || true
+    fi
+else
+    echo "[!] GSF ID henüz üretilmedi. Lütfen önce Waydroid ve Google Play Store uygulamasını bir kez başlatın."
+fi

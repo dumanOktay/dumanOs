@@ -1,0 +1,53 @@
+#!/bin/bash
+# ==============================================================================
+# dumanOS 1-Click APK Installer (Desktop Bridge)
+# ==============================================================================
+
+APK_FILE="$1"
+
+# Check if an APK file was provided
+if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
+    if command -v kdialog &> /dev/null; then
+        kdialog --error "Lütfen geçerli bir .apk dosyası seçin!" --title "dumanOS APK Kurucu"
+    elif command -v zenity &> /dev/null; then
+        zenity --error --text="Lütfen geçerli bir .apk dosyası seçin!" --title="dumanOS APK Kurucu"
+    else
+        echo "Hata: Geçerli bir .apk dosyası belirtilmedi."
+    fi
+    exit 1
+fi
+
+APK_NAME=$(basename "$APK_FILE")
+
+# Helper function to show notifications
+notify_user() {
+    local TITLE="$1"
+    local MSG="$2"
+    if command -v notify-send &> /dev/null; then
+        notify-send "$TITLE" "$MSG" --icon=application-vnd.android.package-archive
+    fi
+}
+
+notify_user "dumanOS APK Kurucu" "$APK_NAME yükleniyor..."
+
+# Ensure Waydroid session is running
+if ! waydroid status | grep -q "RUNNING"; then
+    waydroid session start &
+    sleep 2
+fi
+
+# Install APK into Waydroid
+INSTALL_OUTPUT=$(waydroid app install "$APK_FILE" 2>&1)
+INSTALL_STATUS=$?
+
+if [ $INSTALL_STATUS -eq 0 ]; then
+    notify_user "Kurulum Başarılı!" "$APK_NAME başarıyla yüklendi ve menüye eklendi."
+    if command -v kdialog &> /dev/null; then
+        kdialog --msgbox "'$APK_NAME' başarıyla kuruldu!\nUygulamayı başlatıcı menüsünden açabilirsiniz." --title "dumanOS APK Kurucu"
+    fi
+else
+    notify_user "Kurulum Hatası" "Hata detayı: $INSTALL_OUTPUT"
+    if command -v kdialog &> /dev/null; then
+        kdialog --error "APK Kurulamadı:\n$INSTALL_OUTPUT" --title "dumanOS APK Kurucu"
+    fi
+fi

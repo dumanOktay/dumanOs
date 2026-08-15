@@ -1,0 +1,65 @@
+# dumanOS Core System Packages
+linux-image-amd64
+linux-headers-amd64
+systemd
+systemd-sysv
+dbus
+dbus-user-session
+network-manager
+sudo
+curl
+wget
+git
+ca-certificates
+gnupg
+gpg
+zstandard
+squashfs-tools
+libarchive-tools
+polkit-kde-agent-1
+
+# Display & Minimal KDE Plasma (Wayland)
+sddm
+plasma-desktop
+plasma-workspace-wayland
+kwin-wayland
+kde-config-screenlocker
+kdialog
+zenity
+dolphin
+konsole
+ark
+plasma-nm
+
+# Sound & Multimedia (PipeWire)
+pipewire
+pipewire-audio
+pipewire-pulse
+pipewire-alsa
+wireplumber
+
+# Graphics & Mesa Drivers (Intel, AMD, Generic)
+mesa-va-drivers
+mesa-vulkan-drivers
+libgl1-mesa-dri
+libglx-mesa0
+va-driver-all
+vdpau-driver-all
+
+# Android Container & Waydroid Support
+lxc
+dnsmasq-base
+iptables
+iproute2
+python3
+python3-pip
+python3-venv
+python3-gbinder
+libglib2.0-0
+libgbinder0
+dkms
+kmod
+
+# Flatpak for Universal Linux Apps
+flatpak
+plasma-discover-backend-flatpak

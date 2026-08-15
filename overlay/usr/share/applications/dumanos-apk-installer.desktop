@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=dumanOS APK Kurucu
+Comment=Android APK Paketlerini Tek Tıkla Kur
+Exec=/usr/local/bin/dumanos-apk-install %f
+Icon=application-vnd.android.package-archive
+Terminal=false
+Type=Application
+MimeType=application/vnd.android.package-archive;
+Categories=System;Utility;
+NoDisplay=false

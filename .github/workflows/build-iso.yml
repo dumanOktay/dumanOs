@@ -1,0 +1,69 @@
+name: Build dumanOS x86_64 ISO
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Allows manual trigger from GitHub web interface with a single button click!
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout dumanOS Repository
+        uses: actions/checkout@v4
+
+      - name: Install ISO Building Tools
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            debootstrap \
+            xorriso \
+            isolinux \
+            syslinux-efi \
+            grub-pc-bin \
+            grub-efi-amd64-bin \
+            mtools \
+            squashfs-tools \
+            dosfstools \
+            libarchive-tools \
+            curl \
+            git
+
+      - name: Build dumanOS ISO Image
+        run: |
+          sudo bash builder/build.sh
+
+      - name: Calculate Checksums
+        run: |
+          cd output
+          sha256sum dumanOS-*.iso > dumanOS-checksums.txt
+          ls -lh
+
+      - name: Upload ISO Artifact to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: dumanOS-x86_64-Live-ISO
+          path: output/dumanOS-*.iso
+          retention-days: 14
+
+      - name: Create GitHub Release (Optional on tag/dispatch)
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            output/dumanOS-*.iso
+            output/dumanOS-checksums.txt
+          tag_name: v1.0.0-${{ github.run_number }}
+          name: "dumanOS Release v1.0.0 (Build ${{ github.run_number }})"
+          body: |
+            ## 🚀 dumanOS x86_64 Live & Installable ISO
+            
+            - **Base:** Debian 12 Minimal + KDE Plasma Minimal (Wayland)
+            - **Android Engine:** Waydroid Container (Native GPU/CPU performance)
+            - **Architecture Support:** x86_64 + ARM Translation (libndk)
+            - **Google Play:** MindTheGapps + GSF Auto-Registration
+            - **RAM Footprint:** ~400-480 MB at idle
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
