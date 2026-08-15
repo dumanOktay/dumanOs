@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        arch: [arm64] # Focused on ARM64 for native Apple Silicon/Raspberry Pi performance
+        arch: [arm64]
 
     steps:
       - name: Checkout dumanOS Repository
@@ -28,6 +28,7 @@ jobs:
 
       - name: Install Multi-Arch & ISO Building Tools
         run: |
+          sudo add-apt-repository -y universe
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             debootstrap \
@@ -36,8 +37,6 @@ jobs:
             xorriso \
             isolinux \
             syslinux-efi \
-            grub-efi-arm64-bin \
-            grub-efi-amd64-bin \
             mtools \
             squashfs-tools \
             dosfstools \
