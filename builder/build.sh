@@ -1,31 +1,39 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS ISO Image Generator (Debian 12 Bookworm Minimal + Wayland + Android)
+# dumanOS Multi-Arch ISO Image Generator (Supports arm64 & amd64)
 # ==============================================================================
 
 set -e
 
+ARCH="${ARCH:-arm64}" # Default to arm64 (Apple Silicon / Raspberry Pi / ARM)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BUILD_DIR="/tmp/dumanos-build"
+BUILD_DIR="/tmp/dumanos-build-$ARCH"
 ROOTFS="$BUILD_DIR/rootfs"
 ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "          dumanOS ISO Derleme Süreci Başlatılıyor         "
+echo "      dumanOS ISO Derleme Süreci Başlatılıyor ($ARCH)     "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
 rm -rf "$ROOTFS" "$ISO_DIR"
 mkdir -p "$ROOTFS" "$ISO_DIR"
 
-# 1. Debootstrap Debian 12 Bookworm
-echo "[1/7] Debootstrap ile temel Debian 12 sistemi kuruluyor..."
-debootstrap --arch=amd64 --variant=minbase bookworm "$ROOTFS" http://deb.debian.org/debian/
+# 1. Debootstrap Debian 12 Bookworm for selected architecture
+echo "[1/7] Debootstrap ile temel Debian 12 ($ARCH) kuruluyor..."
+if [ "$ARCH" = "arm64" ] && [ "$(uname -m)" != "aarch64" ] && [ "$(uname -m)" != "arm64" ]; then
+    # Cross-building arm64 on x86 runner using QEMU
+    debootstrap --arch=arm64 --foreign --variant=minbase bookworm "$ROOTFS" http://deb.debian.org/debian/
+    cp /usr/bin/qemu-aarch64-static "$ROOTFS/usr/bin/" 2>/dev/null || true
+    chroot "$ROOTFS" /debootstrap/debootstrap --second-stage
+else
+    debootstrap --arch="$ARCH" --variant=minbase bookworm "$ROOTFS" http://deb.debian.org/debian/
+fi
 
 # 2. Configure Repositories & Keyrings
-echo "[2/7] Paket depoları ve Waydroid kaynakları yapılandırılıyor..."
+echo "[2/7] Paket depoları yapılandırılıyor..."
 cat << 'EOF' > "$ROOTFS/etc/apt/sources.list"
 deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
 deb http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
@@ -48,14 +56,19 @@ cleanup() {
 trap cleanup EXIT
 
 # 3. Chroot & Install Packages
-echo "[3/7] Temel paketler, Çekirdek, Wayland ve KDE kuruluyor..."
+echo "[3/7] Temel paketler, Çekirdek ($ARCH), Wayland ve KDE kuruluyor..."
 cp "$SCRIPT_DIR/packages.list" "$ROOTFS/tmp/packages.list"
+
+KERNEL_PKG="linux-image-$ARCH"
+if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then
+    KERNEL_PKG="linux-image-amd64"
+fi
 
 chroot "$ROOTFS" /bin/bash -c "
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
+apt-get install -y --no-install-recommends $KERNEL_PKG grub-efi-$ARCH-bin live-boot live-config
 apt-get install -y --no-install-recommends \$(grep -v '^#' /tmp/packages.list | tr '\n' ' ')
-apt-get install -y live-boot live-config
 apt-get clean
 rm -rf /tmp/packages.list /var/lib/apt/lists/*
 "
@@ -73,15 +86,11 @@ chroot "$ROOTFS" /bin/bash -c "
 echo 'dumanos' > /etc/hostname
 echo '127.0.0.1 localhost dumanos' > /etc/hosts
 
-# Create user 'duman'
 useradd -m -s /bin/bash -G sudo,audio,video,render,plugdev duman || true
 echo 'duman:duman' | chpasswd
 echo 'root:duman' | chpasswd
-
-# Passwordless sudo for live environment
 echo 'duman ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
-# Enable services
 systemctl enable sddm.service || true
 systemctl enable NetworkManager.service || true
 systemctl enable dumanos-firstboot.service || true
@@ -93,12 +102,13 @@ mkdir -p "$ISO_DIR/live"
 mksquashfs "$ROOTFS" "$ISO_DIR/live/filesystem.squashfs" -comp zstd -Xcompression-level 15 -noappend
 
 # Copy Kernel and Initrd to ISO
-KERNEL_VERSION=$(ls "$ROOTFS/boot" | grep vmlinuz | head -n 1 | sed 's/vmlinuz-//')
-cp "$ROOTFS/boot/vmlinuz-$KERNEL_VERSION" "$ISO_DIR/live/vmlinuz"
-cp "$ROOTFS/boot/initrd.img-$KERNEL_VERSION" "$ISO_DIR/live/initrd"
+KERNEL_IMAGE=$(ls "$ROOTFS/boot" | grep -E 'vmlinuz|vmlinux' | head -n 1)
+INITRD_IMAGE=$(ls "$ROOTFS/boot" | grep initrd | head -n 1)
+cp "$ROOTFS/boot/$KERNEL_IMAGE" "$ISO_DIR/live/vmlinuz"
+cp "$ROOTFS/boot/$INITRD_IMAGE" "$ISO_DIR/live/initrd"
 
-# 7. Create Bootloader (GRUB EFI + BIOS Hybrid)
-echo "[7/7] EFI ve BIOS Bootloader yapılandırılıyor ve ISO oluşturuluyor..."
+# 7. Create Bootloader (GRUB EFI)
+echo "[7/7] EFI Bootloader yapılandırılıyor ve ISO oluşturuluyor..."
 mkdir -p "$ISO_DIR/boot/grub"
 cat << 'EOF' > "$ISO_DIR/boot/grub/grub.cfg"
 set default=0
@@ -108,7 +118,7 @@ insmod all_video
 insmod gfxterm
 terminal_output gfxterm
 
-menuentry "dumanOS Live x86_64 (KDE Wayland + Android Engine)" {
+menuentry "dumanOS Live ARM64 (KDE Wayland + Native Android Engine)" {
     linux /live/vmlinuz boot=live quiet splash components username=duman hostname=dumanos
     initrd /live/initrd
 }
@@ -123,14 +133,11 @@ EOF
 xorriso -as mkisofs \
     -iso-level 3 \
     -full-iso9660-filenames \
-    -volid "DUMANOS_LIVE" \
-    -eltorito-boot boot/grub/grub.cfg \
-    -eltorito-catalog boot/grub/boot.cat \
-    -no-emul-boot -boot-load-size 4 -boot-info-table \
-    -output "$OUTPUT_DIR/dumanOS-x86_64.iso" \
+    -volid "DUMANOS_ARM64" \
+    -output "$OUTPUT_DIR/dumanOS-$ARCH.iso" \
     "$ISO_DIR"
 
 echo "=========================================================="
-echo " [✓] TEBRİKLER! dumanOS ISO başarıyla oluşturuldu:"
-echo "     $OUTPUT_DIR/dumanOS-x86_64.iso"
+echo " [✓] TEBRİKLER! dumanOS ($ARCH) ISO başarıyla oluşturuldu:"
+echo "     $OUTPUT_DIR/dumanOS-$ARCH.iso"
 echo "=========================================================="

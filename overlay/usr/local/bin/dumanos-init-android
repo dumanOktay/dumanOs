@@ -1,16 +1,16 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Android & Google Play Initialization Script
-# Automates Waydroid GAPPS + libndk (ARM Translation) Setup
+# dumanOS Android & Google Play Initialization Script (ARM64 & x86_64)
 # ==============================================================================
 
 set -e
 
+ARCH=$(uname -m)
+
 echo "=========================================="
-echo "   dumanOS Android Engine Setup"
+echo "   dumanOS Android Engine Setup ($ARCH)"
 echo "=========================================="
 
-# Check root/sudo
 if [ "$EUID" -ne 0 ]; then
   echo "[!] Please run with sudo: sudo dumanos-init-android"
   exit 1
@@ -26,30 +26,28 @@ if ! command -v waydroid &> /dev/null; then
 fi
 
 echo "[2/4] Initializing Waydroid with Google Play (GAPPS) Image..."
-# Initialize with official LineageOS GAPPS image
 if [ ! -d "/var/lib/waydroid/images" ] || [ ! -f "/var/lib/waydroid/images/system.img" ]; then
     waydroid init -s GAPPS -f
 else
     echo "[i] Waydroid images already initialized."
 fi
 
-echo "[3/4] Installing libndk ARM-to-x86 Translation Layer..."
-# Clone and run waydroid_extras helper to integrate libndk / libhoudini
-TMP_DIR=$(mktemp -d)
-git clone --depth=1 https://github.com/casualsnek/waydroid_script "$TMP_DIR/waydroid_script"
-
-# Setup python environment for the installer
-python3 -m venv "$TMP_DIR/venv"
-"$TMP_DIR/venv/bin/pip" install --upgrade pip
-"$TMP_DIR/venv/bin/pip" install -r "$TMP_DIR/waydroid_script/requirements.txt"
-
-echo "[*] Injecting libndk translation..."
-"$TMP_DIR/venv/bin/python3" "$TMP_DIR/waydroid_script/main.py" install libndk
-
-# Enable multi-window mode so Android apps open as native desktop windows
+# Multi-window mode enabled
 waydroid prop set persist.waydroid.multi_windows true
 
-rm -rf "$TMP_DIR"
+# ARM Translation only needed on x86_64 (On ARM64, APKs run natively!)
+if [ "$ARCH" = "x86_64" ]; then
+    echo "[3/4] x86_64 detected: Installing libndk ARM Translation..."
+    TMP_DIR=$(mktemp -d)
+    git clone --depth=1 https://github.com/casualsnek/waydroid_script "$TMP_DIR/waydroid_script"
+    python3 -m venv "$TMP_DIR/venv"
+    "$TMP_DIR/venv/bin/pip" install --upgrade pip
+    "$TMP_DIR/venv/bin/pip" install -r "$TMP_DIR/waydroid_script/requirements.txt"
+    "$TMP_DIR/venv/bin/python3" "$TMP_DIR/waydroid_script/main.py" install libndk
+    rm -rf "$TMP_DIR"
+else
+    echo "[3/4] ARM64 ($ARCH) detected: Native APK execution active (No translation needed! 🚀)"
+fi
 
 echo "[4/4] Starting Waydroid Container Service..."
 systemctl enable --now waydroid-container.service

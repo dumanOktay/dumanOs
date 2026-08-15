@@ -1,6 +1,4 @@
-# dumanOS Core System Packages
-linux-image-amd64
-linux-headers-amd64
+# dumanOS Core System Packages (Multi-Arch: amd64 & arm64)
 systemd
 systemd-sysv
 dbus
@@ -38,13 +36,11 @@ pipewire-pulse
 pipewire-alsa
 wireplumber
 
-# Graphics & Mesa Drivers (Intel, AMD, Generic)
+# Graphics & Mesa Drivers
 mesa-va-drivers
 mesa-vulkan-drivers
 libgl1-mesa-dri
 libglx-mesa0
-va-driver-all
-vdpau-driver-all
 
 # Android Container & Waydroid Support
 lxc
@@ -57,7 +53,6 @@ python3-venv
 python3-gbinder
 libglib2.0-0
 libgbinder0
-dkms
 kmod
 
 # Flatpak for Universal Linux Apps
