@@ -8,18 +8,20 @@ on:
 jobs:
   build-arm64:
     name: Build dumanOS ARM64 (Apple Silicon / UTM)
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
 
     steps:
       - name: Checkout dumanOS Repository
         uses: actions/checkout@v4
 
-      - name: Install ISO Building Tools
+      - name: Install ISO Building & Emulation Tools
         run: |
+          sudo add-apt-repository -y universe
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            debootstrap \
+            qemu-user-static \
+            binfmt-support \
             xorriso \
             isolinux \
             syslinux-efi \
@@ -29,9 +31,9 @@ jobs:
             libarchive-tools \
             curl \
             git \
-            eatmydata
+            xz-utils
 
-      - name: Build dumanOS ARM64 ISO
+      - name: Build dumanOS ARM64 ISO Image
         run: |
           sudo bash builder/build.sh
 
@@ -45,7 +47,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dumanOS-arm64-Live-ISO
-          path: output/dumanOS-arm64.iso
+          path: output/dumanOS-*.iso
           retention-days: 14
 
       - name: Create GitHub Release
@@ -56,11 +58,11 @@ jobs:
             output/dumanOS-arm64.iso
             output/dumanOS-arm64-checksums.txt
           tag_name: v1.0.0-arm64
-          name: "dumanOS Release ARM64 (Apple Silicon)"
+          name: "dumanOS Release ARM64 (Apple Silicon / UTM)"
           body: |
             ## 🚀 dumanOS ARM64 Live & Installable ISO
             
-            - **Target:** Apple Silicon (UTM/Mac M1/M2/M3/M4), Raspberry Pi 4/5
+            - **Target:** Apple Silicon (UTM / Mac M1/M2/M3/M4), Raspberry Pi 4/5
             - **Base:** Debian 12 Minimal + KDE Plasma Minimal (Wayland)
             - **Android Engine:** Waydroid Container (%100 Native ARM Performance)
             - **Google Play:** MindTheGapps + GSF Auto-Registration
