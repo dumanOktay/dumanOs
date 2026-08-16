@@ -20,11 +20,18 @@ mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
 rm -rf "$ROOTFS" "$ISO_DIR"
 mkdir -p "$ROOTFS" "$ISO_DIR"
 
+# Determine keyring path
+KEYRING_ARG=""
+if [ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+    KEYRING_ARG="--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
+fi
+
 # 1. High-speed base creation using mmdebstrap (Takes ~60 seconds)
 echo "[1/6] mmdebstrap ile temel Debian 12 ARM64 sistemi kuruluyor..."
 mmdebstrap \
     --arch=arm64 \
     --variant=minbase \
+    $KEYRING_ARG \
     --components="main,contrib,non-free,non-free-firmware" \
     --include="ca-certificates,curl,gnupg,eatmydata,linux-image-arm64,grub-efi-arm64-bin,live-boot,live-config" \
     bookworm \
