@@ -38,6 +38,9 @@ jobs:
       - name: Build dumanOS ARM64 ISO Image
         run: |
           sudo bash builder/build.sh
+          # Fix directory permissions for artifact upload
+          sudo chown -R $USER:$USER output
+          sudo chmod -R 777 output
 
       - name: Calculate Checksums
         run: |
