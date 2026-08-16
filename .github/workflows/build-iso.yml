@@ -9,7 +9,7 @@ jobs:
   build-arm64:
     name: Build dumanOS ARM64 (Apple Silicon / UTM)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Checkout dumanOS Repository

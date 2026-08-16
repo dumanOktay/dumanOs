@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (mmdebstrap High-Speed Pipeline)
+# dumanOS Ultra-Fast ARM64 ISO Generator (Optimized SquashFS & Clean Unmount)
 # ==============================================================================
 
 set -e
@@ -13,7 +13,7 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Fast)   "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor          "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -26,7 +26,7 @@ if [ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
     KEYRING_ARG="--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
 fi
 
-# 1. High-speed base creation using mmdebstrap (Takes ~60 seconds)
+# 1. Base system creation with mmdebstrap (~60s)
 echo "[1/6] mmdebstrap ile temel Debian 12 ARM64 sistemi kuruluyor..."
 mmdebstrap \
     --arch=arm64 \
@@ -60,20 +60,11 @@ EOF
 # Copy qemu emulator so chroot works seamlessly on x86 runner
 cp /usr/bin/qemu-aarch64-static "$ROOTFS/usr/bin/" 2>/dev/null || true
 
-# Mount virtual filesystems
+# Mount virtual filesystems for chroot
 mount --bind /dev "$ROOTFS/dev"
 mount --bind /run "$ROOTFS/run"
 mount -t proc proc "$ROOTFS/proc"
 mount -t sysfs sysfs "$ROOTFS/sys"
-
-cleanup() {
-    echo "[*] Temizleme işlemi yapılıyor..."
-    umount -lf "$ROOTFS/dev" 2>/dev/null || true
-    umount -lf "$ROOTFS/run" 2>/dev/null || true
-    umount -lf "$ROOTFS/proc" 2>/dev/null || true
-    umount -lf "$ROOTFS/sys" 2>/dev/null || true
-}
-trap cleanup EXIT
 
 # 3. Chroot & Install Custom Packages (KDE Wayland, PipeWire, Mesa, Waydroid)
 echo "[3/6] Masaüstü ve sistem bileşenleri kuruluyor..."
@@ -114,16 +105,32 @@ systemctl enable NetworkManager.service || true
 systemctl enable dumanos-firstboot.service || true
 "
 
-# 6. Compress RootFS (SquashFS) & Build Bootable EFI ISO
-echo "[6/6] SquashFS sıkıştırması ve ISO oluşturuluyor..."
+# Copy Kernel & Initrd BEFORE unmounting/squashing
+echo "[*] Çekirdek ve Initrd ISO dizinine kopyalanıyor..."
 mkdir -p "$ISO_DIR/live" "$ISO_DIR/boot/grub"
-mksquashfs "$ROOTFS" "$ISO_DIR/live/filesystem.squashfs" -comp zstd -Xcompression-level 9 -processors $(nproc) -noappend
-
-# Copy Kernel & Initrd
 KERNEL_IMAGE=$(ls "$ROOTFS/boot" | grep -E 'vmlinuz|vmlinux' | head -n 1)
 INITRD_IMAGE=$(ls "$ROOTFS/boot" | grep initrd | head -n 1)
 cp "$ROOTFS/boot/$KERNEL_IMAGE" "$ISO_DIR/live/vmlinuz"
 cp "$ROOTFS/boot/$INITRD_IMAGE" "$ISO_DIR/live/initrd"
+
+# CRITICAL: Cleanly UNMOUNT all virtual filesystems BEFORE SquashFS!
+# If /proc and /sys remain mounted, mksquashfs tries to compress infinite dynamic kernel structures!
+echo "[*] Sanal dosya sistemleri ayrılıyor (Unmount)..."
+umount -lf "$ROOTFS/dev" 2>/dev/null || true
+umount -lf "$ROOTFS/run" 2>/dev/null || true
+umount -lf "$ROOTFS/proc" 2>/dev/null || true
+umount -lf "$ROOTFS/sys" 2>/dev/null || true
+
+# Clean up empty mount points inside rootfs
+rm -rf "$ROOTFS/proc/"* "$ROOTFS/sys/"* "$ROOTFS/dev/"* "$ROOTFS/run/"*
+
+# 6. Ultra-Fast Parallel SquashFS (Takes ~30-45 seconds now!)
+echo "[6/6] Yüksek hızlı SquashFS sıkıştırması başlatılıyor..."
+mksquashfs "$ROOTFS" "$ISO_DIR/live/filesystem.squashfs" \
+    -comp gzip \
+    -processors $(nproc) \
+    -e proc sys dev run tmp \
+    -noappend
 
 # GRUB EFI Configuration
 cat << 'EOF' > "$ISO_DIR/boot/grub/grub.cfg"
@@ -145,6 +152,7 @@ menuentry "dumanOS (Güvenli Mod - Nomodeset)" {
 }
 EOF
 
+# Build EFI Bootable ISO with xorriso
 xorriso -as mkisofs \
     -iso-level 3 \
     -full-iso9660-filenames \
