@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (Official Base RootFS Pipeline)
+# dumanOS Ultra-Fast ARM64 ISO Generator (mmdebstrap High-Speed Pipeline)
 # ==============================================================================
 
 set -e
@@ -13,25 +13,27 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (RootFS)  "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Fast)   "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
 rm -rf "$ROOTFS" "$ISO_DIR"
 mkdir -p "$ROOTFS" "$ISO_DIR"
 
-# 1. Download & Extract Official Debian 12 ARM64 Base (Takes ~10 seconds)
-echo "[1/6] Resmi Debian 12 ARM64 hazır tabanı indiriliyor (Hızlı Pipeline)..."
-ROOTFS_TAR="$BUILD_DIR/debian-12-base-arm64.tar.xz"
-if [ ! -f "$ROOTFS_TAR" ]; then
-    curl -L "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-nocloud-arm64.tar.xz" -o "$ROOTFS_TAR"
-fi
-
-echo "[*] Taban sistem açılıyor..."
-tar -xf "$ROOTFS_TAR" -C "$ROOTFS"
+# 1. High-speed base creation using mmdebstrap (Takes ~60 seconds)
+echo "[1/6] mmdebstrap ile temel Debian 12 ARM64 sistemi kuruluyor..."
+mmdebstrap \
+    --arch=arm64 \
+    --variant=minbase \
+    --components="main,contrib,non-free,non-free-firmware" \
+    --include="ca-certificates,curl,gnupg,eatmydata,linux-image-arm64,grub-efi-arm64-bin,live-boot,live-config" \
+    bookworm \
+    "$ROOTFS" \
+    http://deb.debian.org/debian/
 
 # 2. Configure Repositories & Fast APT Options
 echo "[2/6] Paket depoları ve hızlandırıcılar ayarlanıyor..."
+mkdir -p "$ROOTFS/etc/apt/apt.conf.d"
 cat << 'EOF' > "$ROOTFS/etc/apt/sources.list"
 deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
 deb http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
@@ -48,6 +50,9 @@ DPkg::Options {
 };
 EOF
 
+# Copy qemu emulator so chroot works seamlessly on x86 runner
+cp /usr/bin/qemu-aarch64-static "$ROOTFS/usr/bin/" 2>/dev/null || true
+
 # Mount virtual filesystems
 mount --bind /dev "$ROOTFS/dev"
 mount --bind /run "$ROOTFS/run"
@@ -63,7 +68,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 3. Chroot & Install Custom Packages (KDE Wayland, PipeWire, Waydroid, Live-Boot)
+# 3. Chroot & Install Custom Packages (KDE Wayland, PipeWire, Mesa, Waydroid)
 echo "[3/6] Masaüstü ve sistem bileşenleri kuruluyor..."
 cp "$SCRIPT_DIR/packages.list" "$ROOTFS/tmp/packages.list"
 
@@ -71,20 +76,15 @@ chroot "$ROOTFS" /bin/bash -c "
 export DEBIAN_FRONTEND=noninteractive
 export DEBCONF_NONINTERACTIVE_SEEN=true
 apt-get update
-apt-get install -y --no-install-recommends \
-    linux-image-arm64 \
-    grub-efi-arm64-bin \
-    live-boot \
-    live-config \
-    \$(grep -v '^#' /tmp/packages.list | tr '\n' ' ')
+eatmydata apt-get install -y --no-install-recommends \$(grep -v '^#' /tmp/packages.list | tr '\n' ' ')
 
-# Remove cloud-init if present to boot instantly as desktop
-apt-get purge -y cloud-init 2>/dev/null || true
-
-# Clean caches to save space
+# Clean caches to keep ISO small and fast
 apt-get clean
-rm -rf /tmp/packages.list /var/lib/apt/lists/* /var/cache/apt/*
+rm -rf /tmp/packages.list /var/lib/apt/lists/* /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
 "
+
+# Remove qemu static binary from target rootfs
+rm -f "$ROOTFS/usr/bin/qemu-aarch64-static"
 
 # 4. Copy Overlays (Custom scripts, services, configs)
 echo "[4/6] dumanOS özel ayarları ve scriptleri kopyalanıyor..."
