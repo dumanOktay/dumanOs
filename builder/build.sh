@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (Complete UEFI Bootloader Support)
+# dumanOS Ultra-Fast ARM64 ISO Generator (Auto-Booting Apple Silicon UEFI)
 # ==============================================================================
 
 set -e
@@ -13,7 +13,7 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (UEFI)   "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Auto)   "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -107,34 +107,32 @@ INITRD_IMAGE=$(ls "$ROOTFS/boot" | grep initrd | head -n 1)
 cp "$ROOTFS/boot/$KERNEL_IMAGE" "$ISO_DIR/live/vmlinuz"
 cp "$ROOTFS/boot/$INITRD_IMAGE" "$ISO_DIR/live/initrd"
 
-# 6. Generate Standalone UEFI GRUB Binary (BOOTAA64.EFI)
-echo "[*] Standalone ARM64 UEFI Bootloader (BOOTAA64.EFI) oluşturuluyor..."
+# 6. Embedded Auto-Search GRUB Configuration
 cat << 'EOF' > "$BUILD_DIR/embedded_grub.cfg"
-set default=0
-set timeout=5
+set default="0"
+set timeout=3
 
-insmod all_video
-insmod gfxterm
-terminal_output gfxterm
+search --no-floppy --set=root --file /live/vmlinuz
 
-menuentry "dumanOS Live ARM64 (KDE Wayland + Android Engine)" {
-    linux /live/vmlinuz boot=live quiet splash components username=duman hostname=dumanos
+menuentry "dumanOS Live ARM64 (KDE Wayland + Android)" {
+    linux /live/vmlinuz boot=live console=tty0 quiet splash components username=duman hostname=dumanos
     initrd /live/initrd
 }
 
-menuentry "dumanOS (Güvenli Mod - Nomodeset)" {
-    linux /live/vmlinuz boot=live nomodeset components username=duman hostname=dumanos
+menuentry "dumanOS (Güvenli Metin Modu)" {
+    linux /live/vmlinuz boot=live console=tty0 nomodeset components username=duman hostname=dumanos
     initrd /live/initrd
 }
 EOF
 
-# Copy grub.cfg to ISO boot dir as well
+# Copy grub.cfg to ISO boot dir
 cp "$BUILD_DIR/embedded_grub.cfg" "$ISO_DIR/boot/grub/grub.cfg"
 
-# Create BOOTAA64.EFI standalone inside chroot or host
+# Create standalone ARM64 EFI binary with embedded auto-boot config and modules
 chroot "$ROOTFS" grub-mkstandalone \
     --format=arm64-efi \
     --output=/tmp/BOOTAA64.EFI \
+    --modules="part_gpt part_msdos iso9660 fat ext2 all_video gfxterm font search search_fs_file search_label linux" \
     --locales="" \
     --fonts="" \
     "boot/grub/grub.cfg=/boot/grub/grub.cfg"
