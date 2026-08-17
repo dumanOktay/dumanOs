@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (Complete Universal Storage & Live-Boot)
+# dumanOS Ultra-Fast ARM64 ISO Generator (LightDM Reliable Autologin Edition)
 # ==============================================================================
 
 set -e
@@ -13,7 +13,7 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Fixed)  "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (LightDM) "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -65,7 +65,7 @@ mount --bind /run "$ROOTFS/run"
 mount -t proc proc "$ROOTFS/proc"
 mount -t sysfs sysfs "$ROOTFS/sys"
 
-# 3. Force MODULES=most in initramfs so ALL storage drivers (CD-ROM, VirtIO, SCSI, USB) are included
+# 3. Force MODULES=most in initramfs
 mkdir -p "$ROOTFS/etc/initramfs-tools"
 sed -i 's/MODULES=dep/MODULES=most/g' "$ROOTFS/etc/initramfs-tools/initramfs.conf" 2>/dev/null || true
 echo "MODULES=most" >> "$ROOTFS/etc/initramfs-tools/initramfs.conf"
@@ -98,7 +98,7 @@ export DEBCONF_NONINTERACTIVE_SEEN=true
 apt-get update
 eatmydata apt-get install -y --no-install-recommends \$(grep -v '^#' /tmp/packages.list | tr '\n' ' ')
 
-# Generate fresh universal live-boot initramfs with ALL drivers
+# Generate fresh universal live-boot initramfs
 update-initramfs -c -k all
 
 apt-get clean
@@ -110,24 +110,27 @@ echo "[4/6] dumanOS özel ayarları ve scriptleri kopyalanıyor..."
 cp -r "$PROJECT_ROOT/overlay/"* "$ROOTFS/"
 chmod +x "$ROOTFS/usr/local/bin/"* 2>/dev/null || true
 
-# 5. User Creation & Hostname
-echo "[5/6] Canlı kullanıcı (duman) ve servisler yapılandırılıyor..."
+# 5. User Creation & Hostname with LightDM Autologin Group
+echo "[5/6] Canlı kullanıcı (duman) ve LightDM yapılandırılıyor..."
 chroot "$ROOTFS" /bin/bash -c "
 echo 'dumanos' > /etc/hostname
 echo '127.0.0.1 localhost dumanos' > /etc/hosts
 
-useradd -m -s /bin/bash -G sudo,audio,video,render,plugdev duman || true
+groupadd -r autologin 2>/dev/null || true
+useradd -m -s /bin/bash -G sudo,audio,video,render,plugdev,autologin duman || true
+usermod -aG autologin duman || true
 echo 'duman:duman' | chpasswd
 echo 'root:duman' | chpasswd
 echo 'duman ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
-systemctl enable sddm.service || true
+systemctl set-default graphical.target
+systemctl enable lightdm.service || true
 systemctl enable NetworkManager.service || true
 systemctl enable dumanos-firstboot.service || true
 "
 
-# Copy Rebuilt Kernel & Rebuilt Universal Initrd
-echo "[*] Yeniden derlenen Canlı Çekirdek ve Initrd kopyalanıyor..."
+# Copy Kernel & Initrd
+echo "[*] Çekirdek ve Initrd kopyalanıyor..."
 mkdir -p "$ISO_DIR/live" "$ISO_DIR/boot/grub/arm64-efi" "$ISO_DIR/EFI/BOOT"
 KERNEL_IMAGE=$(ls "$ROOTFS/boot" | grep -E 'vmlinuz|vmlinux' | head -n 1)
 INITRD_IMAGE=$(ls "$ROOTFS/boot" | grep initrd | head -n 1)
@@ -144,13 +147,13 @@ set timeout=2
 
 search --file --set=root /live/vmlinuz
 
-menuentry "dumanOS Live ARM64 (KDE Wayland + Android)" {
-    linux /live/vmlinuz boot=live components username=duman hostname=dumanos
+menuentry "dumanOS Live ARM64 (KDE Plasma Desktop)" {
+    linux /live/vmlinuz boot=live components username=duman autologin quiet splash
     initrd /live/initrd
 }
 
 menuentry "dumanOS (Güvenli Mod - Nomodeset)" {
-    linux /live/vmlinuz boot=live nomodeset components username=duman hostname=dumanos
+    linux /live/vmlinuz boot=live components username=duman autologin nomodeset
     initrd /live/initrd
 }
 EOF
@@ -159,7 +162,7 @@ EOF
 cp "$BUILD_DIR/grub.cfg" "$ISO_DIR/boot/grub/grub.cfg"
 cp "$BUILD_DIR/grub.cfg" "$ISO_DIR/EFI/BOOT/grub.cfg"
 
-# Create standalone ARM64 EFI binary with all built-in modules
+# Create standalone ARM64 EFI binary
 cp "$BUILD_DIR/grub.cfg" "$ROOTFS/tmp/grub.cfg"
 chroot "$ROOTFS" grub-mkstandalone \
     --format=arm64-efi \
