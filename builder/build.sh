@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (100% Complete GRUB Module Suite)
+# dumanOS Ultra-Fast ARM64 ISO Generator (Complete XWayland & KDE Desktop Suite)
 # ==============================================================================
 
 set -e
@@ -13,7 +13,7 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Modules) "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Desktop) "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -65,7 +65,7 @@ mount --bind /run "$ROOTFS/run"
 mount -t proc proc "$ROOTFS/proc"
 mount -t sysfs sysfs "$ROOTFS/sys"
 
-# 3. Chroot & Install Custom Packages (KDE Wayland, PipeWire, Mesa, Waydroid)
+# 3. Chroot & Install Custom Packages (KDE Wayland, XWayland, PipeWire, Mesa, Waydroid)
 echo "[3/6] Masaüstü ve sistem bileşenleri kuruluyor..."
 cp "$SCRIPT_DIR/packages.list" "$ROOTFS/tmp/packages.list"
 
@@ -107,7 +107,7 @@ INITRD_IMAGE=$(ls "$ROOTFS/boot" | grep initrd | head -n 1)
 cp "$ROOTFS/boot/$KERNEL_IMAGE" "$ISO_DIR/live/vmlinuz"
 cp "$ROOTFS/boot/$INITRD_IMAGE" "$ISO_DIR/live/initrd"
 
-# Copy ALL GRUB EFI modules to ISO boot dir so configfile and all commands work
+# Copy ALL GRUB EFI modules to ISO boot dir
 cp -r "$ROOTFS/usr/lib/grub/arm64-efi/"* "$ISO_DIR/boot/grub/arm64-efi/" 2>/dev/null || true
 
 # Create universal grub.cfg
@@ -118,12 +118,12 @@ set timeout=2
 search --file --set=root /live/vmlinuz
 
 menuentry "dumanOS Live ARM64 (KDE Wayland + Android)" {
-    linux /live/vmlinuz boot=live console=tty0 quiet splash components username=duman hostname=dumanos
+    linux /live/vmlinuz boot=live quiet splash components username=duman hostname=dumanos
     initrd /live/initrd
 }
 
 menuentry "dumanOS (Güvenli Mod - Nomodeset)" {
-    linux /live/vmlinuz boot=live console=tty0 nomodeset components username=duman hostname=dumanos
+    linux /live/vmlinuz boot=live nomodeset components username=duman hostname=dumanos
     initrd /live/initrd
 }
 EOF

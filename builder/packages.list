@@ -16,11 +16,18 @@ squashfs-tools
 libarchive-tools
 polkit-kde-agent-1
 
+# X11 & Wayland Core Display Server
+xserver-xorg-core
+xserver-xorg-video-all
+xwayland
+x11-xserver-utils
+
 # Display & Minimal KDE Plasma (Wayland)
 sddm
 plasma-desktop
 plasma-workspace-wayland
 kwin-wayland
+kwin-x11
 kde-config-screenlocker
 kdialog
 zenity
