@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (Perfect Live-Boot Initrd & Display)
+# dumanOS Ultra-Fast ARM64 ISO Generator (Complete Universal Storage & Live-Boot)
 # ==============================================================================
 
 set -e
@@ -13,7 +13,7 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Initrd)  "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Fixed)  "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -32,7 +32,7 @@ mmdebstrap \
     --variant=minbase \
     $KEYRING_ARG \
     --components="main,contrib,non-free,non-free-firmware" \
-    --include="ca-certificates,curl,gnupg,eatmydata,linux-image-arm64,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd,grub-efi-arm64,grub-efi-arm64-bin,grub-common,mtools,dosfstools" \
+    --include="ca-certificates,curl,gnupg,eatmydata,linux-image-arm64,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd,grub-efi-arm64,grub-efi-arm64-bin,grub-common,mtools,dosfstools,busybox" \
     bookworm \
     "$ROOTFS" \
     http://deb.debian.org/debian/
@@ -65,23 +65,32 @@ mount --bind /run "$ROOTFS/run"
 mount -t proc proc "$ROOTFS/proc"
 mount -t sysfs sysfs "$ROOTFS/sys"
 
-# 3. Chroot & Install Custom Packages (KDE Wayland, XWayland, PipeWire, Mesa, Waydroid)
-echo "[3/6] Masaüstü ve sistem bileşenleri kuruluyor..."
-cp "$SCRIPT_DIR/packages.list" "$ROOTFS/tmp/packages.list"
-
-# Force live-boot and virtual gpu modules in initramfs
+# 3. Force MODULES=most in initramfs so ALL storage drivers (CD-ROM, VirtIO, SCSI, USB) are included
 mkdir -p "$ROOTFS/etc/initramfs-tools"
+sed -i 's/MODULES=dep/MODULES=most/g' "$ROOTFS/etc/initramfs-tools/initramfs.conf" 2>/dev/null || true
+echo "MODULES=most" >> "$ROOTFS/etc/initramfs-tools/initramfs.conf"
+echo "BUSYBOX=y" >> "$ROOTFS/etc/initramfs-tools/initramfs.conf"
+
 cat << 'EOF' >> "$ROOTFS/etc/initramfs-tools/modules"
 squashfs
 overlay
 isofs
 loop
-virtio_gpu
-virtio_pci
+cdrom
+sr_mod
+sd_mod
+virtio_scsi
 virtio_blk
+virtio_pci
+virtio_gpu
 virtio_ring
-virtio_dma_buf
+usb_storage
+uas
 EOF
+
+# Install custom packages
+echo "[3/6] Masaüstü ve sistem bileşenleri kuruluyor..."
+cp "$SCRIPT_DIR/packages.list" "$ROOTFS/tmp/packages.list"
 
 chroot "$ROOTFS" /bin/bash -c "
 export DEBIAN_FRONTEND=noninteractive
@@ -89,8 +98,8 @@ export DEBCONF_NONINTERACTIVE_SEEN=true
 apt-get update
 eatmydata apt-get install -y --no-install-recommends \$(grep -v '^#' /tmp/packages.list | tr '\n' ' ')
 
-# CRITICAL: Rebuild initramfs with live-boot and squashfs support included!
-update-initramfs -u -k all
+# Generate fresh universal live-boot initramfs with ALL drivers
+update-initramfs -c -k all
 
 apt-get clean
 rm -rf /tmp/packages.list /var/lib/apt/lists/* /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
@@ -117,7 +126,7 @@ systemctl enable NetworkManager.service || true
 systemctl enable dumanos-firstboot.service || true
 "
 
-# Copy Rebuilt Kernel & Rebuilt Live Initrd
+# Copy Rebuilt Kernel & Rebuilt Universal Initrd
 echo "[*] Yeniden derlenen Canlı Çekirdek ve Initrd kopyalanıyor..."
 mkdir -p "$ISO_DIR/live" "$ISO_DIR/boot/grub/arm64-efi" "$ISO_DIR/EFI/BOOT"
 KERNEL_IMAGE=$(ls "$ROOTFS/boot" | grep -E 'vmlinuz|vmlinux' | head -n 1)
