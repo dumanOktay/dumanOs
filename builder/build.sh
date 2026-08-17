@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (Bulletproof Auto-Booting UEFI)
+# dumanOS Ultra-Fast ARM64 ISO Generator (100% Complete GRUB Module Suite)
 # ==============================================================================
 
 set -e
@@ -13,7 +13,7 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Auto)   "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Modules) "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -101,20 +101,21 @@ systemctl enable dumanos-firstboot.service || true
 
 # Copy Kernel & Initrd
 echo "[*] Çekirdek ve Initrd kopyalanıyor..."
-mkdir -p "$ISO_DIR/live" "$ISO_DIR/boot/grub" "$ISO_DIR/EFI/BOOT"
+mkdir -p "$ISO_DIR/live" "$ISO_DIR/boot/grub/arm64-efi" "$ISO_DIR/EFI/BOOT"
 KERNEL_IMAGE=$(ls "$ROOTFS/boot" | grep -E 'vmlinuz|vmlinux' | head -n 1)
 INITRD_IMAGE=$(ls "$ROOTFS/boot" | grep initrd | head -n 1)
 cp "$ROOTFS/boot/$KERNEL_IMAGE" "$ISO_DIR/live/vmlinuz"
 cp "$ROOTFS/boot/$INITRD_IMAGE" "$ISO_DIR/live/initrd"
 
-# Main grub.cfg on ISO
-cat << 'EOF' > "$ISO_DIR/boot/grub/grub.cfg"
-set default=0
-set timeout=3
+# Copy ALL GRUB EFI modules to ISO boot dir so configfile and all commands work
+cp -r "$ROOTFS/usr/lib/grub/arm64-efi/"* "$ISO_DIR/boot/grub/arm64-efi/" 2>/dev/null || true
 
-insmod all_video
-insmod gfxterm
-terminal_output gfxterm
+# Create universal grub.cfg
+cat << 'EOF' > "$BUILD_DIR/grub.cfg"
+set default=0
+set timeout=2
+
+search --file --set=root /live/vmlinuz
 
 menuentry "dumanOS Live ARM64 (KDE Wayland + Android)" {
     linux /live/vmlinuz boot=live console=tty0 quiet splash components username=duman hostname=dumanos
@@ -127,32 +128,28 @@ menuentry "dumanOS (Güvenli Mod - Nomodeset)" {
 }
 EOF
 
-# Early embedded grub.cfg that automatically bridges to the main menu
-cat << 'EOF' > "$BUILD_DIR/early-grub.cfg"
-search --file --set=root /live/vmlinuz
-set prefix=($root)/boot/grub
-configfile ($root)/boot/grub/grub.cfg
-EOF
+# Place grub.cfg in all standard locations
+cp "$BUILD_DIR/grub.cfg" "$ISO_DIR/boot/grub/grub.cfg"
+cp "$BUILD_DIR/grub.cfg" "$ISO_DIR/EFI/BOOT/grub.cfg"
 
-cp "$BUILD_DIR/early-grub.cfg" "$ROOTFS/tmp/early-grub.cfg"
-
-# Create standalone ARM64 EFI binary with early embedded config
+# Create standalone ARM64 EFI binary with all built-in modules
+cp "$BUILD_DIR/grub.cfg" "$ROOTFS/tmp/grub.cfg"
 chroot "$ROOTFS" grub-mkstandalone \
     --format=arm64-efi \
     --output=/tmp/BOOTAA64.EFI \
-    --modules="part_gpt part_msdos iso9660 fat ext2 normal all_video gfxterm font search search_fs_file search_label linux echo test memdisk" \
     --locales="" \
     --fonts="" \
-    "boot/grub/grub.cfg=/tmp/early-grub.cfg"
+    "boot/grub/grub.cfg=/tmp/grub.cfg"
 
 cp "$ROOTFS/tmp/BOOTAA64.EFI" "$ISO_DIR/EFI/BOOT/BOOTAA64.EFI"
 
 # Create embedded FAT16 EFI Boot Image (efiboot.img)
 echo "[*] EFI Boot İmajı (efiboot.img) hazırlanıyor..."
-dd if=/dev/zero of="$BUILD_DIR/efiboot.img" bs=1M count=20
+dd if=/dev/zero of="$BUILD_DIR/efiboot.img" bs=1M count=30
 mkfs.vfat "$BUILD_DIR/efiboot.img"
 mmd -i "$BUILD_DIR/efiboot.img" ::/EFI ::/EFI/BOOT
 mcopy -i "$BUILD_DIR/efiboot.img" "$ISO_DIR/EFI/BOOT/BOOTAA64.EFI" ::/EFI/BOOT/BOOTAA64.EFI
+mcopy -i "$BUILD_DIR/efiboot.img" "$BUILD_DIR/grub.cfg" ::/EFI/BOOT/grub.cfg
 cp "$BUILD_DIR/efiboot.img" "$ISO_DIR/boot/grub/efiboot.img"
 
 # Remove qemu static binary

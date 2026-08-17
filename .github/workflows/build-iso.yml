@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-arm64:
     name: Build dumanOS ARM64 (Apple Silicon / UTM)
@@ -38,7 +41,6 @@ jobs:
       - name: Build dumanOS ARM64 ISO Image
         run: |
           sudo bash builder/build.sh
-          # Fix directory permissions for artifact upload
           sudo chown -R $USER:$USER output
           sudo chmod -R 777 output
 
@@ -60,7 +62,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: |
-            output/dumanOS-arm64.iso
+            output/dumanOS-*.iso
             output/dumanOS-arm64-checksums.txt
           tag_name: v1.0.0-arm64
           name: "dumanOS Release ARM64 (Apple Silicon / UTM)"
