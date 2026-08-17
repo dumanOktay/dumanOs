@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (LightDM Reliable Autologin Edition)
+# dumanOS Ultra-Fast ARM64 ISO Generator (Bulletproof Direct Auto-Desktop Engine)
 # ==============================================================================
 
 set -e
@@ -13,7 +13,7 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (LightDM) "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Direct) "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -110,8 +110,8 @@ echo "[4/6] dumanOS özel ayarları ve scriptleri kopyalanıyor..."
 cp -r "$PROJECT_ROOT/overlay/"* "$ROOTFS/"
 chmod +x "$ROOTFS/usr/local/bin/"* 2>/dev/null || true
 
-# 5. User Creation & Hostname with LightDM Autologin Group
-echo "[5/6] Canlı kullanıcı (duman) ve LightDM yapılandırılıyor..."
+# 5. User Creation & Hostname with Direct Auto-Login
+echo "[5/6] Canlı kullanıcı (duman) ve otomatik masaüstü yapılandırılıyor..."
 chroot "$ROOTFS" /bin/bash -c "
 echo 'dumanos' > /etc/hostname
 echo '127.0.0.1 localhost dumanos' > /etc/hosts
@@ -122,6 +122,10 @@ usermod -aG autologin duman || true
 echo 'duman:duman' | chpasswd
 echo 'root:duman' | chpasswd
 echo 'duman ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+# Ensure user directory ownership
+cp /etc/skel/.bash_profile /home/duman/.bash_profile 2>/dev/null || true
+chown -R duman:duman /home/duman
 
 systemctl set-default graphical.target
 systemctl enable lightdm.service || true
