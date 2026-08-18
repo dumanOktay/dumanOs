@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (Bulletproof Direct Auto-Desktop Engine)
+# dumanOS Ultra-Fast ARM64 ISO Generator (Complete Root Mountpoints & Init Suite)
 # ==============================================================================
 
 set -e
@@ -13,7 +13,7 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Direct) "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Init)   "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -32,7 +32,7 @@ mmdebstrap \
     --variant=minbase \
     $KEYRING_ARG \
     --components="main,contrib,non-free,non-free-firmware" \
-    --include="ca-certificates,curl,gnupg,eatmydata,linux-image-arm64,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd,grub-efi-arm64,grub-efi-arm64-bin,grub-common,mtools,dosfstools,busybox" \
+    --include="ca-certificates,curl,gnupg,eatmydata,linux-image-arm64,systemd,systemd-sysv,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd,grub-efi-arm64,grub-efi-arm64-bin,grub-common,mtools,dosfstools,busybox" \
     bookworm \
     "$ROOTFS" \
     http://deb.debian.org/debian/
@@ -97,6 +97,9 @@ export DEBIAN_FRONTEND=noninteractive
 export DEBCONF_NONINTERACTIVE_SEEN=true
 apt-get update
 eatmydata apt-get install -y --no-install-recommends \$(grep -v '^#' /tmp/packages.list | tr '\n' ' ')
+
+# Ensure /sbin/init points directly to systemd
+ln -sf /lib/systemd/systemd /sbin/init
 
 # Generate fresh universal live-boot initramfs
 update-initramfs -c -k all
@@ -195,14 +198,17 @@ umount -lf "$ROOTFS/dev" 2>/dev/null || true
 umount -lf "$ROOTFS/run" 2>/dev/null || true
 umount -lf "$ROOTFS/proc" 2>/dev/null || true
 umount -lf "$ROOTFS/sys" 2>/dev/null || true
-rm -rf "$ROOTFS/proc/"* "$ROOTFS/sys/"* "$ROOTFS/dev/"* "$ROOTFS/run/"*
 
-# SquashFS compression
+# Empty virtual files but KEEP the directory mountpoints
+rm -rf "$ROOTFS/proc/"* "$ROOTFS/sys/"* "$ROOTFS/dev/"* "$ROOTFS/run/"* 2>/dev/null || true
+mkdir -p "$ROOTFS/proc" "$ROOTFS/sys" "$ROOTFS/dev" "$ROOTFS/run" "$ROOTFS/tmp" "$ROOTFS/mnt" "$ROOTFS/media"
+chmod 1777 "$ROOTFS/tmp"
+
+# SquashFS compression with full clean rootfs structure
 echo "[*] SquashFS sıkıştırması başlatılıyor..."
 mksquashfs "$ROOTFS" "$ISO_DIR/live/filesystem.squashfs" \
     -comp gzip \
     -processors $(nproc) \
-    -e proc sys dev run tmp \
     -noappend
 
 # Build Standard UEFI Hybrid ISO Image with xorriso
