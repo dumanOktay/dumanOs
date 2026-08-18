@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# dumanOS Ultra-Fast ARM64 ISO Generator (100% Pre-Bundled Desktop & Apps)
+# dumanOS Ultra-Fast ARM64 ISO Generator (Complete Working KDE Plasma Desktop)
 # ==============================================================================
 
 set -e
@@ -13,7 +13,7 @@ ISO_DIR="$BUILD_DIR/iso"
 OUTPUT_DIR="$PROJECT_ROOT/output"
 
 echo "=========================================================="
-echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Bundle) "
+echo "    dumanOS ARM64 Hızlı ISO Derleme Başlatılıyor (Desktop) "
 echo "=========================================================="
 
 mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
@@ -25,17 +25,14 @@ if [ -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
     KEYRING_ARG="--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
 fi
 
-# Extract all custom packages into comma-separated list for mmdebstrap
-CUSTOM_PACKAGES=$(grep -v '^#' "$SCRIPT_DIR/packages.list" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
-
-# 1. Base system creation with mmdebstrap (Direct Host Download - 100% Reliable)
-echo "[1/6] mmdebstrap ile KDE Masaüstü ve tüm sistem paketleri kuruluyor..."
+# 1. Base system creation with mmdebstrap
+echo "[1/6] mmdebstrap ile temel Debian 12 ARM64 sistemi kuruluyor..."
 mmdebstrap \
     --arch=arm64 \
     --variant=minbase \
     $KEYRING_ARG \
     --components="main,contrib,non-free,non-free-firmware" \
-    --include="ca-certificates,curl,gnupg,eatmydata,linux-image-arm64,systemd,systemd-sysv,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd,grub-efi-arm64,grub-efi-arm64-bin,grub-common,mtools,dosfstools,busybox,sudo,network-manager,$CUSTOM_PACKAGES" \
+    --include="ca-certificates,curl,gnupg,eatmydata,linux-image-arm64,systemd,systemd-sysv,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd,grub-efi-arm64,grub-efi-arm64-bin,grub-common,mtools,dosfstools,busybox,sudo,network-manager" \
     bookworm \
     "$ROOTFS" \
     http://deb.debian.org/debian/
@@ -59,8 +56,9 @@ DPkg::Options {
 };
 EOF
 
-# Copy host DNS configuration
+# Copy host DNS configuration & QEMU binary
 cp /etc/resolv.conf "$ROOTFS/etc/resolv.conf" 2>/dev/null || true
+echo "nameserver 8.8.8.8" >> "$ROOTFS/etc/resolv.conf"
 cp /usr/bin/qemu-aarch64-static "$ROOTFS/usr/bin/" 2>/dev/null || true
 
 # Mount virtual filesystems
@@ -69,7 +67,43 @@ mount --bind /run "$ROOTFS/run"
 mount -t proc proc "$ROOTFS/proc"
 mount -t sysfs sysfs "$ROOTFS/sys"
 
-# 3. Force MODULES=most in initramfs
+# 3. Install Desktop Environment inside Chroot with verified DNS
+echo "[3/6] KDE Plasma, LightDM ve Grafik Masaüstü Paketleri kuruluyor..."
+chroot "$ROOTFS" /bin/bash -c "
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+apt-get update
+eatmydata apt-get install -y --no-install-recommends \
+    plasma-desktop \
+    plasma-workspace-wayland \
+    plasma-workspace \
+    kwin-wayland \
+    kwin-x11 \
+    xserver-xorg-core \
+    xserver-xorg-video-all \
+    xwayland \
+    x11-xserver-utils \
+    lightdm \
+    lightdm-gtk-greeter \
+    dolphin \
+    konsole \
+    pipewire \
+    pipewire-audio \
+    pipewire-pulse \
+    wireplumber \
+    mesa-va-drivers \
+    mesa-vulkan-drivers \
+    libgl1-mesa-dri \
+    libglx-mesa0 \
+    waydroid \
+    lxc \
+    zenity
+
+# Ensure /sbin/init points directly to systemd
+ln -sf /lib/systemd/systemd /sbin/init
+"
+
+# Force MODULES=most in initramfs
 mkdir -p "$ROOTFS/etc/initramfs-tools"
 sed -i 's/MODULES=dep/MODULES=most/g' "$ROOTFS/etc/initramfs-tools/initramfs.conf" 2>/dev/null || true
 echo "MODULES=most" >> "$ROOTFS/etc/initramfs-tools/initramfs.conf"
@@ -93,12 +127,8 @@ uas
 EOF
 
 chroot "$ROOTFS" /bin/bash -c "
-# Ensure /sbin/init points directly to systemd
-ln -sf /lib/systemd/systemd /sbin/init
-
 # Generate fresh universal live-boot initramfs
 update-initramfs -c -k all
-
 apt-get clean
 rm -rf /var/lib/apt/lists/* /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
 "
