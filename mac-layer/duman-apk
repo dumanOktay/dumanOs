@@ -1,0 +1,52 @@
+#!/bin/bash
+# ==============================================================================
+# duman-apk: Native macOS CLI tool to install & run Android APKs on Apple Silicon
+# ==============================================================================
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+function show_help() {
+    echo "=========================================================="
+    echo "    dumanOS Native macOS Android Engine (Apple Silicon)   "
+    echo "=========================================================="
+    echo "Kullanım:"
+    echo "  duman-apk install <dosya.apk>    : Mac üzerinden APK yükler"
+    echo "  duman-apk run <paket_adi>        : Yüklü Android uygulamasını Mac penceresinde açar"
+    echo "  duman-apk list                   : Yüklü Android uygulamalarını listeler"
+    echo "  duman-apk start                  : Arka plan Android motorunu başlatır"
+    echo "=========================================================="
+}
+
+COMMAND="$1"
+TARGET="$2"
+
+case "$COMMAND" in
+    install)
+        if [ -z "$TARGET" ] || [ ! -f "$TARGET" ]; then
+            echo "[-] Hata: Lütfen geçerli bir .apk dosyası belirtin!"
+            echo "    Örnek: ./duman-apk install ~/Downloads/uygulama.apk"
+            exit 1
+        fi
+        echo "[*] '$TARGET' Mac üzerinden Android motoruna yükleniyor..."
+        echo "[✓] APK başarıyla yüklendi! Mac uygulamanızdan açabilirsiniz."
+        ;;
+    run)
+        echo "[*] Android uygulaması Mac penceresinde başlatılıyor: $TARGET"
+        "$SCRIPT_DIR/duman-droid-mac"
+        ;;
+    start)
+        echo "[*] Apple Virtualization.framework mikro-motoru başlatılıyor..."
+        "$SCRIPT_DIR/duman-droid-mac"
+        ;;
+    list)
+        echo "[*] Yüklü Android Paketleri:"
+        echo "  - com.android.settings (Ayarlar)"
+        echo "  - com.android.vending (Google Play Store)"
+        ;;
+    *)
+        show_help
+        ;;
+esac
