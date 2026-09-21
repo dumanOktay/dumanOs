@@ -37,6 +37,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, VZVirtualMachineDelegate {
         self.setupAndBootVirtualMachine()
     }
 
+    func findISOPath() -> URL? {
+        let currentDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+
+        let candidates = [
+            currentDir.appendingPathComponent("output/dumanOS-arm64.iso"),
+            currentDir.appendingPathComponent("../output/dumanOS-arm64.iso"),
+            homeDir.appendingPathComponent("Documents/dumanOs/output/dumanOS-arm64.iso"),
+            homeDir.appendingPathComponent("Downloads/dumanOS-arm64.iso")
+        ]
+
+        for url in candidates {
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
     func setupAndBootVirtualMachine() {
         let config = VZVirtualMachineConfiguration()
 
@@ -60,8 +79,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, VZVirtualMachineDelegate {
         config.platform = platform
 
         // Storage: Attach dumanOS ARM64 ISO
-        let isoPath = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("output/dumanOS-arm64.iso")
-        if FileManager.default.fileExists(atPath: isoPath.path) {
+        if let isoPath = findISOPath() {
             do {
                 let attachment = try VZDiskImageStorageDeviceAttachment(url: isoPath, readOnly: true)
                 let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: attachment)
@@ -71,7 +89,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, VZVirtualMachineDelegate {
                 print("[-] Failed to attach ISO: \(error)")
             }
         } else {
-            print("[-] ISO not found at \(isoPath.path)")
+            print("[-] ISO could not be found in standard locations.")
         }
 
         // Graphics Device (Metal paravirtualized GPU)
