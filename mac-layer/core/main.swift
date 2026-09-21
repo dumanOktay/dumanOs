@@ -6,13 +6,22 @@
 import Cocoa
 import Virtualization
 
+class CustomVMView: VZVirtualMachineView {
+    override var acceptsFirstResponder: Bool {
+        return true
+    }
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate, VZVirtualMachineDelegate {
     var window: NSWindow!
-    var vmView: VZVirtualMachineView!
+    var vmView: CustomVMView!
     var virtualMachine: VZVirtualMachine?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 1. Create Native macOS Window
+        // 1. Set Regular Application Activation Policy (Enables full keyboard routing)
+        NSApp.setActivationPolicy(.regular)
+
+        // 2. Create Native macOS Window
         let windowRect = NSRect(x: 100, y: 100, width: 1100, height: 750)
         window = NSWindow(
             contentRect: windowRect,
@@ -22,18 +31,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, VZVirtualMachineDelegate {
         )
         window.title = "dumanOS Mac Android Layer (Apple Silicon Native)"
         window.center()
+        window.acceptsMouseMovedEvents = true
 
-        // 2. Create Metal-Accelerated Virtual Machine View
-        vmView = VZVirtualMachineView(frame: window.contentView!.bounds)
+        // 3. Create Metal-Accelerated Virtual Machine View with First Responder
+        vmView = CustomVMView(frame: window.contentView!.bounds)
         vmView.autoresizingMask = [.width, .height]
         window.contentView?.addSubview(vmView)
 
         window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(vmView)
         NSApp.activate(ignoringOtherApps: true)
 
-        print("[dumanOS Mac Layer] Native macOS GUI Window created successfully.")
+        print("[dumanOS Mac Layer] Native macOS GUI Window created successfully with full keyboard focus.")
         
-        // 3. Initialize Virtualization Engine & Boot ISO
+        // 4. Initialize Virtualization Engine & Boot ISO
         self.setupAndBootVirtualMachine()
     }
 
@@ -126,6 +137,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, VZVirtualMachineDelegate {
                 switch result {
                 case .success:
                     print("[✓] dumanOS Virtual Machine started successfully in native Mac window!")
+                    DispatchQueue.main.async {
+                        self.window.makeFirstResponder(self.vmView)
+                    }
                 case .failure(let error):
                     print("[-] Failed to start VM: \(error)")
                 }
